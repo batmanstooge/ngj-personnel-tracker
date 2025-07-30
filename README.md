@@ -3,41 +3,41 @@ Location Tracker App
 A comprehensive location tracking application with offline support, dark mode, and real-time GPS tracking across iOS, Android, and Web platforms. 
 **Features** 
 📍 Real-time Location Tracking 
-    Continuous GPS monitoring with visual markers on Google Maps
-    Distance-based location updates (10m minimum) for battery efficiency
-    Automatic location permission handling
+    -Continuous GPS monitoring with visual markers on Google Maps
+    -Distance-based location updates (10m minimum) for battery efficiency
+    -Automatic location permission handling
      
 
 📱 Offline Capabilities 
-    SQLite local database for offline location storage
-    Automatic sync when internet connection is restored
-    Visual indicators for online/offline status
-    Manual sync functionality
+    -SQLite local database for offline location storage
+   - Automatic sync when internet connection is restored
+    -Visual indicators for online/offline status
+    -Manual sync functionality
      
 
 🌙 Dark Mode Support 
-    Toggle between light/dark themes
-    Respects system theme preferences
-    Smooth theme transitions with adaptive UI
-    Map style adaptation (normal/hybrid based on theme)
+    -Toggle between light/dark themes
+   - Respects system theme preferences
+   - Smooth theme transitions with adaptive UI
+    -Map style adaptation (normal/hybrid based on theme)
      
 
 🔐 Secure Authentication 
-    Phone number-based login with OTP verification
-    JWT token authentication
-    Persistent login sessions
+    -Phone number-based login with OTP verification
+    -JWT token authentication
+    -Persistent login sessions
      
 
 📅 Location History & Analytics 
-    Calendar-based location history browsing
-    Daily location summaries with first/last location tracking
-    Location data visualization on interactive maps
+    -Calendar-based location history browsing
+   - Daily location summaries with first/last location tracking
+    -Location data visualization on interactive maps
      
 
 🌐 Cross-platform Support 
-    Native iOS and Android mobile apps
-    Web application support
-    Consistent user experience across platforms
+    -Native iOS and Android mobile apps
+    -Web application support
+    -Consistent user experience across platforms
      
 
 **Tech Stack** 
@@ -78,41 +78,40 @@ Platform-Specific Requirements
 
 Setup Instructions 
 1.**Backend Setup -- node**
+Navigate to backend directory
+cd backend
 
-# Navigate to backend directory
-cd service
-
-# Install dependencies
+ Install dependencies
 npm install
 
-# Create environment file
+ Create environment file
 cp .env.template .env
 
-# Update .env with your configurations:
-# - MongoDB connection string
-# - JWT secret
-# - Twilio credentials
-# - Google Maps API key
+ Update .env with your configurations:
+ - MongoDB connection string
+ - JWT secret
+ - Twilio credentials
+- Google Maps API key
 
 # Start backend server
 npm run dev  # Development mode
-# or
+ or
 npm start    # Production mode
 
 
 2.**Frontend Setup --flutter**
-# Navigate to frontend directory
+ Navigate to frontend directory
 cd mobile_11
 
-# Install Flutter dependencies
+ Install Flutter dependencies
 flutter pub get
 
-# Configure Google Maps API keys:
-# Android: android/app/src/main/AndroidManifest.xml
-# iOS: ios/Runner/AppDelegate.swift
-# Web: web/index.html
+ Configure Google Maps API keys:
+ Android: android/app/src/main/AndroidManifest.xml
+ iOS: ios/Runner/AppDelegate.swift
+ Web: web/index.html
 
-# Run the app
+ Run the app
 flutter run
 
 
