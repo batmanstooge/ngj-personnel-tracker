@@ -1,0 +1,483 @@
+google ky AIzaSyCdwhQ96MYjJ7fVAcqTv6nXNrzCJfZ9gpA
+
+ {
+  "name": "location-tracker-backend",
+  "version": "1.0.0",
+  "description": "Backend for location tracking app",
+  "main": "server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "mongoose": "^7.5.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1",
+    "twilio": "^4.14.0",
+    "jsonwebtoken": "^9.0.2",
+    "bcryptjs": "^2.4.3"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  }
+}  
+
+/server.js
+import express from 'express';
+import mongoose from 'mongoose';
+import cors from 'cors';
+import 'dotenv/config';
+import authRoutes from './routes/auth.js';
+import locationRoutes from './routes/locations.js';
+
+const app = express();
+const PORT = process.env.PORT || 5000;
+
+// Middleware
+app.use(cors());
+app.use(express.json());
+
+// Database connection
+mongoose.connect(process.env.MONGODB_URI, {
+  useNewUrlParser: true,
+  useUnifiedTopology: true,
+})
+.then(() => console.log('MongoDB connected'))
+.catch(err => console.log(err));
+
+// Routes
+app.use('/api/auth', authRoutes);
+app.use('/api/locations', locationRoutes);
+
+// Health check
+app.get('/', (req, res) => {
+  res.json({ message: 'Location Tracker API is running!' });
+});
+
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+});
+
+config/database.js
+import mongoose from 'mongoose';
+
+const connectDB = async () => {
+  try {
+    const conn = await mongoose.connect(process.env.MONGODB_URI, {
+      useNewUrlParser: true,
+      useUnifiedTopology: true,
+    });
+    console.log(`MongoDB Connected: ${conn.connection.host}`);
+  } catch (error) {
+    console.error('Database connection error:', error);
+    process.exit(1);
+  }
+};
+
+export default connectDB;
+
+/middleware/auth.js
+import jwt from 'jsonwebtoken';
+
+const auth = (req, res, next) => {
+  try {
+    const token = req.header('Authorization')?.replace('Bearer ', '');
+    
+    if (!token) {
+      return res.status(401).json({ message: 'No token, authorization denied' });
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your_jwt_secret');
+    req.userId = decoded.userId;
+    next();
+  } catch (error) {
+    res.status(401).json({ message: 'Token is not valid' });
+  }
+};
+
+export default auth;
+
+models/User.js
+import mongoose from 'mongoose';
+
+const userSchema = new mongoose.Schema({
+  phoneNumber: {
+    type: String,
+    required: true,
+    unique: true,
+  },
+  otp: {
+    type: String,
+  },
+  otpExpiry: {
+    type: Date,
+  },
+  isActive: {
+    type: Boolean,
+    default: true,
+  },
+  lastLogin: {
+    type: Date,
+    default: Date.now,
+  },
+  createdAt: {
+    type: Date,
+    default: Date.now,
+  }
+});
+
+export default mongoose.model('User', userSchema);
+
+models/Location.js
+import mongoose from 'mongoose';
+
+const locationSchema = new mongoose.Schema({
+  userId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    required: true,
+  },
+  latitude: {
+    type: Number,
+    required: true,
+  },
+  longitude: {
+    type: Number,
+    required: true,
+  },
+  timestamp: {
+    type: Date,
+    default: Date.now,
+  },
+  placeName: {
+    type: String,
+  },
+  address: {
+    type: String,
+  },
+  accuracy: {
+    type: Number,
+  }
+});
+
+// Index for faster queries
+locationSchema.index({ userId: 1, timestamp: -1 });
+locationSchema.index({ userId: 1, timestamp: 1 });
+
+export default mongoose.model('Location', locationSchema);
+
+routes/auth.js
+import express from 'express';
+import { sendOTP, verifyOTP, logout } from '../controllers/authController.js';
+
+const router = express.Router();
+
+router.post('/send-otp', sendOTP);
+router.post('/verify-otp', verifyOTP);
+router.post('/logout', logout);
+
+export default router;
+
+routes/locations.js
+import express from 'express';
+import auth from '../middleware/auth.js';
+import {
+  saveLocation,
+  getDailyLocations,
+  getDateRangeLocations,
+  getCalendarData,
+  getDailySummary
+} from '../controllers/locationController.js';
+
+const router = express.Router();
+
+router.post('/', auth, saveLocation);
+router.get('/daily', auth, getDailyLocations);
+router.get('/date-range', auth, getDateRangeLocations);
+router.get('/calendar', auth, getCalendarData);
+router.get('/daily-summary', auth, getDailySummary);
+
+export default router;
+
+controllers/authController.js
+import User from '../models/User.js';
+import twilio from 'twilio';
+import jwt from 'jsonwebtoken';
+
+// Twilio configuration (optional - you can use other SMS services)
+const client = twilio(
+  process.env.TWILIO_ACCOUNT_SID,
+  process.env.TWILIO_AUTH_TOKEN
+);
+
+// Generate OTP
+const generateOTP = () => {
+  return Math.floor(100000 + Math.random() * 900000).toString();
+};
+
+// Send OTP
+const sendOTP = async (req, res) => {
+  try {
+    const { phoneNumber } = req.body;
+    
+    // Validate phone number format
+    if (!phoneNumber || phoneNumber.length < 10) {
+      return res.status(400).json({ message: 'Invalid phone number' });
+    }
+
+    const otp = generateOTP();
+    const otpExpiry = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+
+    // Find or create user
+    let user = await User.findOne({ phoneNumber });
+    
+    if (!user) {
+      user = new User({ phoneNumber });
+    }
+
+    user.otp = otp;
+    user.otpExpiry = otpExpiry;
+    await user.save();
+
+    // Send OTP via SMS (using Twilio or any SMS service)
+    // For testing, you might want to skip this or use console.log
+    if (process.env.NODE_ENV === 'production') {
+      await client.messages.create({
+        body: `Your OTP for Location Tracker is: ${otp}`,
+        from: process.env.TWILIO_PHONE_NUMBER,
+        to: phoneNumber
+      });
+    } else {
+      console.log(`OTP for ${phoneNumber}: ${otp}`); // For development
+    }
+
+    res.json({ 
+      message: 'OTP sent successfully',
+      // Don't send actual OTP in production - this is for testing
+      testOtp: process.env.NODE_ENV === 'development' ? otp : undefined
+    });
+
+  } catch (error) {
+    console.error('Send OTP error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// Verify OTP
+const verifyOTP = async (req, res) => {
+  try {
+    const { phoneNumber, otp } = req.body;
+
+    const user = await User.findOne({ phoneNumber });
+    
+    if (!user) {
+      return res.status(400).json({ message: 'User not found' });
+    }
+
+    // Check if OTP is valid and not expired
+    if (user.otp !== otp || user.otpExpiry < new Date()) {
+      return res.status(400).json({ message: 'Invalid or expired OTP' });
+    }
+
+    // Clear OTP after successful verification
+    user.otp = undefined;
+    user.otpExpiry = undefined;
+    user.lastLogin = new Date();
+    await user.save();
+
+    // Generate JWT token
+    const token = jwt.sign(
+      { userId: user._id },
+      process.env.JWT_SECRET || 'your_jwt_secret',
+      { expiresIn: '30d' }
+    );
+
+    res.json({
+      message: 'Login successful',
+      token,
+      user: {
+        id: user._id,
+        phoneNumber: user.phoneNumber
+      }
+    });
+
+  } catch (error) {
+    console.error('Verify OTP error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// Logout
+const logout = async (req, res) => {
+  try {
+    res.json({ message: 'Logged out successfully' });
+  } catch (error) {
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+export { sendOTP, verifyOTP, logout };
+
+controllers/locationController.js
+import Location from '../models/Location.js';
+import User from '../models/User.js';
+import mongoose from 'mongoose';
+
+// Save location
+const saveLocation = async (req, res) => {
+  try {
+    const { latitude, longitude, placeName, address, accuracy } = req.body;
+    const userId = req.userId;
+
+    const location = new Location({
+      userId,
+      latitude,
+      longitude,
+      placeName,
+      address,
+      accuracy
+    });
+
+    await location.save();
+
+    res.status(201).json({
+      message: 'Location saved successfully',
+      location
+    });
+
+  } catch (error) {
+    console.error('Save location error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// Get daily locations
+const getDailyLocations = async (req, res) => {
+  try {
+    const { date } = req.query;
+    const userId = req.userId;
+
+    const targetDate = date ? new Date(date) : new Date();
+    const startOfDay = new Date(targetDate.setHours(0, 0, 0, 0));
+    const endOfDay = new Date(targetDate.setHours(23, 59, 59, 999));
+
+    const locations = await Location.find({
+      userId,
+      timestamp: {
+        $gte: startOfDay,
+        $lte: endOfDay
+      }
+    }).sort({ timestamp: 1 });
+
+    res.json(locations);
+
+  } catch (error) {
+    console.error('Get daily locations error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// Get date range locations
+const getDateRangeLocations = async (req, res) => {
+  try {
+    const { start, end } = req.query;
+    const userId = req.userId;
+
+    const locations = await Location.find({
+      userId,
+      timestamp: {
+        $gte: new Date(start),
+        $lte: new Date(end)
+      }
+    }).sort({ timestamp: 1 });
+
+    res.json(locations);
+
+  } catch (error) {
+    console.error('Get date range locations error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// Get calendar data (summary of locations per day)
+const getCalendarData = async (req, res) => {
+  try {
+    const userId = req.userId;
+
+    const calendarData = await Location.aggregate([
+      {
+        $match: {
+          userId: new mongoose.Types.ObjectId(userId)
+        }
+      },
+      {
+        $group: {
+          _id: {
+            year: { $year: "$timestamp" },
+            month: { $month: "$timestamp" },
+            day: { $dayOfMonth: "$timestamp" }
+          },
+          count: { $sum: 1 },
+          date: { $first: "$timestamp" }
+        }
+      },
+      {
+        $sort: { date: -1 }
+      }
+    ]);
+
+    res.json(calendarData);
+
+  } catch (error) {
+    console.error('Get calendar data error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// Get daily summary
+const getDailySummary = async (req, res) => {
+  try {
+    const { date } = req.query;
+    const userId = req.userId;
+
+    const targetDate = date ? new Date(date) : new Date();
+    const startOfDay = new Date(targetDate.setHours(0, 0, 0, 0));
+    const endOfDay = new Date(targetDate.setHours(23, 59, 59, 999));
+
+    const locations = await Location.find({
+      userId,
+      timestamp: {
+        $gte: startOfDay,
+        $lte: endOfDay
+      }
+    }).sort({ timestamp: 1 });
+
+    // Create summary
+    const summary = {
+      date: startOfDay,
+      totalLocations: locations.length,
+      firstLocation: locations[0] || null,
+      lastLocation: locations[locations.length - 1] || null,
+      locations: locations
+    };
+
+    res.json(summary);
+
+  } catch (error) {
+    console.error('Get daily summary error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+export { saveLocation, getDailyLocations, getDateRangeLocations, getCalendarData, getDailySummary };
+
+.env
+PORT=5000
+MONGODB_URI=mongodb://localhost:27017/locationtracker
+JWT_SECRET=your_jwt_secret_key_here
+TWILIO_ACCOUNT_SID=your_twilio_account_sid
+TWILIO_AUTH_TOKEN=your_twilio_auth_token
+TWILIO_PHONE_NUMBER=your_twilio_phone_number
+NODE_ENV=development
