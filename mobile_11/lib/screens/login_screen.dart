@@ -1,7 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:fluttertoast/fluttertoast.dart';
-import '../services/api_service.dart';
+import 'package:image_picker/image_picker.dart';
+import 'dart:io';
+import 'dart:convert';
+import 'dart:io' show Platform;
+import 'package:device_info_plus/device_info_plus.dart';
+import '../services/auth_service.dart';
 import 'home_screen.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -10,67 +15,106 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  final TextEditingController _phoneController = TextEditingController();
-  final TextEditingController _otpController = TextEditingController();
-  bool _isOtpSent = false;
+  final TextEditingController _emailController = TextEditingController();
+  File? _loginPhoto;
   bool _isLoading = false;
+  bool _photoTaken = false;
 
-  void _sendOtp() async {
-    final phoneNumber = _phoneController.text.trim();
-    
-    if (phoneNumber.isEmpty || phoneNumber.length < 10) {
-      Fluttertoast.showToast(msg: 'Please enter a valid phone number');
-      return;
-    }
-
-    setState(() => _isLoading = true);
-    
+  Future<void> _takeLoginPhoto() async {
     try {
-      final response = await ApiService.sendOtp(phoneNumber);
-      
-      if (response.containsKey('message')) {
+      final picker = ImagePicker();
+      final pickedFile = await picker.pickImage(
+        source: ImageSource.camera,
+        maxWidth: 800,
+        maxHeight: 800,
+      );
+
+      if (pickedFile != null) {
         setState(() {
-          _isOtpSent = true;
+          _loginPhoto = File(pickedFile.path);
+          _photoTaken = true;
         });
-        Fluttertoast.showToast(msg: response['message']);
       }
     } catch (e) {
-      Fluttertoast.showToast(msg: 'Error: ${e.toString()}');
-      print('Error: ${e.toString()}');
-    } finally {
-      setState(() => _isLoading = false);
+      Fluttertoast.showToast(msg: 'Error taking photo: ${e.toString()}');
     }
   }
 
-  void _verifyOtp() async {
-    final phoneNumber = _phoneController.text.trim();
-    final otp = _otpController.text.trim();
-    
-    if (otp.isEmpty || otp.length < 4) {
-      Fluttertoast.showToast(msg: 'Please enter a valid OTP');
+  Future<String> _getImageBase64(File imageFile) async {
+    List<int> imageBytes = await imageFile.readAsBytes();
+    return base64Encode(imageBytes);
+  }
+
+  Future<String> _getDeviceId() async {
+    final deviceInfo = DeviceInfoPlugin();
+
+    if (Platform.isAndroid) {
+      final androidInfo = await deviceInfo.androidInfo;
+      return androidInfo.id;
+    } else if (Platform.isIOS) {
+      final iosInfo = await deviceInfo.iosInfo;
+      return iosInfo.identifierForVendor ?? 'unknown_device';
+    } else {
+      return 'unknown_device';
+    }
+  }
+
+  void _login() async {
+    final email = _emailController.text.trim();
+
+    if (email.isEmpty || !email.contains('@')) {
+      Fluttertoast.showToast(msg: 'Please enter a valid email address');
+      return;
+    }
+
+    if (_loginPhoto == null) {
+      Fluttertoast.showToast(msg: 'Please take a login photo for verification');
       return;
     }
 
     setState(() => _isLoading = true);
-    
+
     try {
-      final response = await ApiService.verifyOtp(phoneNumber, otp);
-      
+      // Convert photo to base64
+      final photoBase64 = await _getImageBase64(_loginPhoto!);
+
+      // Get device ID
+      final deviceId = await _getDeviceId();
+
+      final response = await AuthService().login(email, deviceId, photoBase64);
+
       if (response.containsKey('token')) {
         SharedPreferences prefs = await SharedPreferences.getInstance();
         await prefs.setBool('isLoggedIn', true);
-        
+
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(builder: (context) => HomeScreen()),
         );
-        
+
         Fluttertoast.showToast(msg: 'Login successful!');
       } else {
-        Fluttertoast.showToast(msg: response['message'] ?? 'Invalid OTP');
+        // Handle error response properly
+        String errorMessage = response['message'] ?? 'Login failed';
+        Fluttertoast.showToast(msg: errorMessage);
       }
     } catch (e) {
-      Fluttertoast.showToast(msg: 'Error: ${e.toString()}');
+      // Better error handling
+      String errorMessage = EdgeInsets.only.toString();
+      if (e.toString().contains('Connection refused')) {
+        errorMessage =
+            'Unable to connect to server. Please check your internet connection.';
+      } else if (e.toString().contains('SocketException')) {
+        errorMessage = 'Network error. Please try again.';
+      } else {
+        errorMessage = e
+            .toString()
+            .replaceAll('Exception: ', '')
+            .replaceAll('Error: ', '');
+      }
+
+      print('Login error: ${e.toString()}');
+      Fluttertoast.showToast(msg: "User not found. Please register first");
     } finally {
       setState(() => _isLoading = false);
     }
@@ -79,10 +123,7 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text('Login'),
-        centerTitle: true,
-      ),
+      appBar: AppBar(title: Text('Login'), centerTitle: true),
       body: Padding(
         padding: const EdgeInsets.all(24.0),
         child: Column(
@@ -95,65 +136,116 @@ class _LoginScreenState extends State<LoginScreen> {
             ),
             SizedBox(height: 30),
             Text(
-              'Location Tracker',
+              'Personnel Tracker',
               style: Theme.of(context).textTheme.headlineSmall,
             ),
             SizedBox(height: 30),
-            
+
             TextField(
-              controller: _phoneController,
+              controller: _emailController,
               decoration: InputDecoration(
-                labelText: 'Phone Number',
-                prefixText: '+91 ',
+                labelText: 'Email Address',
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),
-                prefixStyle: TextStyle(fontSize: 16),
+                prefixIcon: Icon(Icons.email),
               ),
-              keyboardType: TextInputType.phone,
-              enabled: !_isOtpSent && !_isLoading,
+              keyboardType: TextInputType.emailAddress,
+              enabled: !_isLoading,
             ),
-            
+
             SizedBox(height: 20),
-            
-            if (_isOtpSent)
-              TextField(
-                controller: _otpController,
-                decoration: InputDecoration(
-                  labelText: 'Enter OTP',
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-                keyboardType: TextInputType.number,
-                enabled: !_isLoading,
+
+            // Photo capture section
+            Container(
+              padding: EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                border: Border.all(color: Theme.of(context).dividerColor),
+                borderRadius: BorderRadius.circular(12),
               ),
-            
+              child: Column(
+                children: [
+                  Text(
+                    'Login Photo Verification',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  SizedBox(height: 10),
+                  Text(
+                    'Please take a photo for physical presence verification',
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                  SizedBox(height: 15),
+
+                  if (_photoTaken && _loginPhoto != null)
+                    Container(
+                      height: 150,
+                      width: 150,
+                      decoration: BoxDecoration(
+                        border: Border.all(
+                          color: Theme.of(context).primaryColor,
+                        ),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: Image.file(_loginPhoto!, fit: BoxFit.cover),
+                      ),
+                    )
+                  else
+                    Container(
+                      height: 150,
+                      width: 150,
+                      decoration: BoxDecoration(
+                        border: Border.all(
+                          color: Theme.of(context).disabledColor,
+                        ),
+                        borderRadius: BorderRadius.circular(8),
+                        color: Theme.of(context).disabledColor.withOpacity(0.1),
+                      ),
+                      child: Icon(
+                        Icons.camera_alt,
+                        size: 50,
+                        color: Theme.of(context).disabledColor,
+                      ),
+                    ),
+
+                  SizedBox(height: 15),
+
+                  ElevatedButton.icon(
+                    onPressed: _isLoading ? null : _takeLoginPhoto,
+                    icon: Icon(Icons.camera_alt),
+                    label: Text('Take Photo'),
+                  ),
+                ],
+              ),
+            ),
+
             SizedBox(height: 30),
-            
+
             SizedBox(
               width: double.infinity,
               height: 50,
-              child: _isLoading
-                  ? Center(child: CircularProgressIndicator())
-                  : ElevatedButton(
-                      onPressed: _isOtpSent ? _verifyOtp : _sendOtp,
-                      child: Text(
-                        _isOtpSent ? 'Verify OTP' : 'Send OTP',
-                        style: TextStyle(fontSize: 16),
+              child:
+                  _isLoading
+                      ? Center(child: CircularProgressIndicator())
+                      : ElevatedButton(
+                        onPressed: _photoTaken ? _login : null,
+                        child: Text(
+                          'Start Job & Login',
+                          style: TextStyle(fontSize: 16),
+                        ),
                       ),
-                    ),
             ),
-            
-            if (_isOtpSent)
-              TextButton(
-                onPressed: () {
-                  setState(() {
-                    _isOtpSent = false;
-                  });
-                },
-                child: Text('Resend OTP'),
-              ),
+
+            SizedBox(height: 20),
+
+            TextButton(
+              onPressed: () {
+                Navigator.pushReplacementNamed(context, '/register');
+              },
+              child: Text('Don\'t have an account? Register'),
+            ),
           ],
         ),
       ),

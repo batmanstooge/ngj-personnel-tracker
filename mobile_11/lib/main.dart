@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:personal_tracker/screens/verify_email_screen.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'providers/theme_provider.dart';
 import 'themes/app_theme.dart';
+import 'screens/register_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/home_screen.dart';
 import 'services/connectivity_service.dart';
@@ -10,7 +12,7 @@ import 'services/connectivity_service.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await ConnectivityService().initialize();
-  
+
   runApp(
     ChangeNotifierProvider(
       create: (context) => ThemeProvider(),
@@ -29,7 +31,14 @@ class MyApp extends StatelessWidget {
           theme: AppTheme.lightTheme,
           darkTheme: AppTheme.darkTheme,
           themeMode: themeProvider.themeMode,
-          home: SplashScreen(),
+          initialRoute: '/',
+          routes: {
+            '/': (context) => SplashScreen(),
+            '/register': (context) => RegisterScreen(),
+            '/login': (context) => LoginScreen(),
+            '/home': (context) => HomeScreen(),
+            '/verify-email': (context) => _buildVerifyEmailScreen(),
+          },
           debugShowCheckedModeBanner: false,
         );
       },
@@ -52,7 +61,7 @@ class _SplashScreenState extends State<SplashScreen> {
   checkLoginStatus() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
     bool isLoggedIn = prefs.getBool('isLoggedIn') ?? false;
-    
+
     Future.delayed(Duration(seconds: 2), () {
       Navigator.pushReplacement(
         context,
@@ -77,7 +86,7 @@ class _SplashScreenState extends State<SplashScreen> {
             ),
             SizedBox(height: 20),
             Text(
-              'Personal Tracker',
+              'Personnel Tracker',
               style: Theme.of(context).textTheme.headlineMedium,
             ),
             SizedBox(height: 10),
@@ -90,4 +99,8 @@ class _SplashScreenState extends State<SplashScreen> {
       ),
     );
   }
+}
+
+Widget _buildVerifyEmailScreen() {
+  return VerifyEmailScreen(token: 'dummy_token');
 }

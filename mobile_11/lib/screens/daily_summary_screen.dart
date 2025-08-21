@@ -6,10 +6,13 @@ import '../services/location_service.dart';
 class DailySummaryScreen extends StatefulWidget {
   final DateTime date;
 
-  DailySummaryScreen({required this.date});
+ const DailySummaryScreen({super.key, required this.date});
+ 
 
-  @override
-  _DailySummaryScreenState createState() => _DailySummaryScreenState();
+@override
+  State<DailySummaryScreen> createState() {
+    return _DailySummaryScreenState();
+  }
 }
 
 class _DailySummaryScreenState extends State<DailySummaryScreen> {

@@ -7,6 +7,7 @@ class Location {
   final String? placeName;
   final String? address;
   final double? accuracy;
+  final bool isStationary;
 
   Location({
     required this.id,
@@ -17,6 +18,7 @@ class Location {
     this.placeName,
     this.address,
     this.accuracy,
+    this.isStationary = false,
   });
 
   factory Location.fromJson(Map<String, dynamic> json) {
@@ -29,6 +31,7 @@ class Location {
       placeName: json['placeName'],
       address: json['address'],
       accuracy: json['accuracy'] != null ? (json['accuracy'] as num).toDouble() : null,
+      isStationary: json['isStationary'] ?? false,
     );
   }
 

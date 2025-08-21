@@ -26,7 +26,7 @@ class LocationService {
     if (permission == LocationPermission.denied) {
       permission = await Geolocator.requestPermission();
       return permission == LocationPermission.whileInUse ||
-          permission == LocationPermission.always;
+             permission == LocationPermission.always;
     }
     return true;
   }
@@ -41,18 +41,18 @@ class LocationService {
   // Start location tracking with offline support
   void startTracking(Function(Position) onLocationChanged) {
     _positionStream?.cancel();
-
+    
     _positionStream = Geolocator.getPositionStream(
       locationSettings: LocationSettings(
         accuracy: LocationAccuracy.high,
-        distanceFilter: 10, // meters
+        distanceFilter: 100, // 100 meters minimum
       ),
     ).listen((Position position) async {
       onLocationChanged(position);
-
+      
       // Save to local database
       await _saveLocationOffline(position);
-
+      
       // Try to sync if online
       if (ConnectivityService().hasConnection) {
         await _syncOfflineLocations();
@@ -69,10 +69,52 @@ class LocationService {
         timestamp: DateTime.now(),
         accuracy: position.accuracy,
       );
-
+      
       await _dbService.insertLocation(offlineLocation);
     } catch (e) {
       print('Error saving offline location: $e');
+    }
+  }
+
+  // Save location with additional parameters
+  Future<void> saveLocation({
+    required double latitude,
+    required double longitude,
+    double? accuracy,
+    String? placeName,
+    String? address,
+    bool isStationary = false,
+    int? stationaryDuration,
+  }) async {
+    try {
+      // Try to save to server first
+      if (ConnectivityService().hasConnection) {
+        await ApiService.saveLocation(
+          latitude: latitude,
+          longitude: longitude,
+          accuracy: accuracy,
+          placeName: placeName,
+          address: address,
+          isStationary: isStationary,
+          stationaryDuration: stationaryDuration,
+        );
+      }
+      
+      // Always save to local database
+      final offlineLocation = OfflineLocation(
+        latitude: latitude,
+        longitude: longitude,
+        timestamp: DateTime.now(),
+        accuracy: accuracy,
+        placeName: placeName,
+        address: address,
+        isStationary: isStationary,
+      );
+      
+      await _dbService.insertLocation(offlineLocation);
+      
+    } catch (e) {
+      print('Error saving location: $e');
     }
   }
 
@@ -80,7 +122,7 @@ class LocationService {
   Future<void> _syncOfflineLocations() async {
     try {
       final unsyncedLocations = await _dbService.getUnsyncedLocations();
-
+      
       for (var location in unsyncedLocations) {
         try {
           // Send to server
@@ -90,8 +132,9 @@ class LocationService {
             placeName: location.placeName,
             address: location.address,
             accuracy: location.accuracy,
+            isStationary: location.isStationary,
           );
-
+          
           // Mark as synced
           await _dbService.markLocationAsSynced(location.id!);
         } catch (e) {
@@ -113,34 +156,68 @@ class LocationService {
 
   // Get locations for a specific date (offline + online)
   Future<List<dynamic>> getLocationsForDate(DateTime date) async {
-    // Get offline locations
+    // Get offline locations for the specific date
     final offlineLocations = await _dbService.getLocationsByDate(date);
-
+    
     // If online, also get from server
     if (ConnectivityService().hasConnection) {
       try {
-        final onlineLocations = await ApiService.getDailyLocations(date);
+        final onlineLocations = await ApiService.getDailyJobSummary(date);
+        // Extract locations from the job summary response
+        if (onlineLocations.containsKey('jobs') && onlineLocations['jobs'] is List) {
+          List<dynamic> allLocations = [];
+          for (var job in onlineLocations['jobs']) {
+            if (job is Map<String, dynamic> && job.containsKey('locations')) {
+              allLocations.addAll(job['locations']);
+            }
+          }
+          return allLocations;
+        }
+      } catch (e) {
+        print('Error fetching online locations: $e');
+      }
+    }
+    
+    // Return offline locations if offline or server error
+    return offlineLocations.map((loc) => {
+      '_id': loc.id.toString(),
+      'latitude': loc.latitude,
+      'longitude': loc.longitude,
+      'timestamp': loc.timestamp.toIso8601String(),
+      'placeName': loc.placeName,
+      'address': loc.address,
+      'accuracy': loc.accuracy,
+      'isStationary': loc.isStationary,
+    }).toList();
+  }
+
+  // Get locations for a specific job (offline + online)
+  Future<List<dynamic>> getJobLocations() async {
+    // Get offline locations
+    final offlineLocations = await _dbService.getAllLocations();
+    
+    // If online, also get from server
+    if (ConnectivityService().hasConnection) {
+      try {
+        final onlineLocations = await ApiService.getJobLocations();
         // Combine and deduplicate if needed
         return onlineLocations;
       } catch (e) {
         print('Error fetching online locations: $e');
       }
     }
-
+    
     // Return offline locations if offline or server error
-    return offlineLocations
-        .map(
-          (loc) => {
-            '_id': loc.id.toString(),
-            'latitude': loc.latitude,
-            'longitude': loc.longitude,
-            'timestamp': loc.timestamp.toIso8601String(),
-            'placeName': loc.placeName,
-            'address': loc.address,
-            'accuracy': loc.accuracy,
-          },
-        )
-        .toList();
+    return offlineLocations.map((loc) => {
+      '_id': loc.id.toString(),
+      'latitude': loc.latitude,
+      'longitude': loc.longitude,
+      'timestamp': loc.timestamp.toIso8601String(),
+      'placeName': loc.placeName,
+      'address': loc.address,
+      'accuracy': loc.accuracy,
+      'isStationary': loc.isStationary,
+    }).toList();
   }
 
   void stopTracking() {

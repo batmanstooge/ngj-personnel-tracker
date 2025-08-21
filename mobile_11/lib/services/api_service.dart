@@ -3,7 +3,8 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 class ApiService {
-  static final String baseUrl = 'http://10.0.2.2:3000';
+  static final String baseUrl =
+      'http://10.0.2.2:3000'; 
   static String? _token;
 
   static Future<void> init() async {
@@ -11,7 +12,7 @@ class ApiService {
     _token = prefs.getString('auth_token');
   }
 
-  static Future<Map<String, dynamic>?> _makeRequest(
+  static Future<Map<String, dynamic>> _makeRequest(
     String method,
     String endpoint, {
     Map<String, dynamic>? body,
@@ -46,7 +47,7 @@ class ApiService {
 
     if (response.statusCode == 200 || response.statusCode == 201) {
       if (response.body.isEmpty) {
-        return null;
+        return {};
       }
       return jsonDecode(response.body) as Map<String, dynamic>;
     } else {
@@ -110,55 +111,82 @@ class ApiService {
     }
   }
 
-  static Future<Map<String, dynamic>> sendOtp(String phoneNumber) async {
+  // Register user
+  static Future<Map<String, dynamic>> register(String email) async {
     final response = await _makeRequest(
       'POST',
-      '/login/send-otp',
-      body: {'phoneNumber': phoneNumber},
+      '/auth/register',
+      body: {'email': email},
     );
-    print('Response from sendOtp: $response');
-    return response ?? {};
+    return response;
   }
 
-  static Future<Map<String, dynamic>> verifyOtp(
-    String phoneNumber,
-    String otp,
+  // Verify email
+  static Future<Map<String, dynamic>> verifyEmail(String token) async {
+    final response = await _makeRequest(
+      'GET',
+      '/auth/verify-email?token=$token',
+    );
+    return response;
+  }
+
+  // Login user and start job
+  static Future<Map<String, dynamic>> login(
+    String email,
+    String deviceId,
+    String loginPhoto,
   ) async {
     final response = await _makeRequest(
       'POST',
-      '/login/verify-otp',
-      body: {'phoneNumber': phoneNumber, 'otp': otp},
+      '/auth/login',
+      body: {'email': email, 'deviceId': deviceId, 'loginPhoto': loginPhoto},
     );
 
     // Save token if login successful
-    if (response != null && response.containsKey('token')) {
+    if (response.containsKey('token')) {
       _token = response['token'];
       SharedPreferences prefs = await SharedPreferences.getInstance();
       await prefs.setString('auth_token', _token!);
     }
-    print('Response from verifyOtp: $response');
 
-    return response ?? {};
+    return response;
   }
 
-  static Future<void> logout() async {
-    try {
-      await _makeRequest('POST', '/login/logout');
-    } catch (e) {
-      print('Logout error: $e');
-    } finally {
-      _token = null;
-      SharedPreferences prefs = await SharedPreferences.getInstance();
-      await prefs.remove('auth_token');
-    }
+  // Logout user and end job
+  static Future<Map<String, dynamic>> logout(String logoutPhoto) async {
+  try {
+    final response = await _makeRequest('POST', '/auth/logout', body: {
+      'logoutPhoto': logoutPhoto,
+    });
+    
+    _token = null;
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    await prefs.remove('auth_token');
+    await prefs.remove('current_job_id');
+    
+    return response;
+  } catch (e) {
+    print('API Service logout error: $e');
+    // Clear local tokens even if server call fails
+    _token = null;
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    await prefs.remove('auth_token');
+    await prefs.remove('current_job_id');
+    
+    // Return a default response
+    return {'message': 'Logged out successfully'};
   }
+}
 
+  // Save location
   static Future<Map<String, dynamic>> saveLocation({
     required double latitude,
     required double longitude,
     String? placeName,
     String? address,
     double? accuracy,
+    bool isStationary = false,
+    int? stationaryDuration,
   }) async {
     final response = await _makeRequest(
       'POST',
@@ -169,28 +197,31 @@ class ApiService {
         'placeName': placeName,
         'address': address,
         'accuracy': accuracy,
+        'isStationary': isStationary,
+        'stationaryDuration': stationaryDuration,
       },
     );
-    return response ?? {};
+    return response;
   }
 
-  static Future<List<dynamic>> getDailyLocations(DateTime date) async {
-    final dateString =
-        '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
-    return await _makeListRequest('GET', '/locations/daily?date=$dateString');
+  // Get job locations
+  static Future<List<dynamic>> getJobLocations() async {
+    return await _makeListRequest('GET', '/locations/job');
   }
 
-  static Future<List<dynamic>> getCalendarData() async {
-    return await _makeListRequest('GET', '/locations/calendar');
-  }
-
-  static Future<Map<String, dynamic>> getDailySummary(DateTime date) async {
+  // Get daily job summary
+  static Future<Map<String, dynamic>> getDailyJobSummary(DateTime date) async {
     final dateString =
         '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
     final response = await _makeRequest(
       'GET',
       '/locations/daily-summary?date=$dateString',
     );
-    return response ?? {};
+    return response;
+  }
+
+  // Get stationary locations
+  static Future<List<dynamic>> getStationaryLocations() async {
+    return await _makeListRequest('GET', '/locations/stationary');
   }
 }

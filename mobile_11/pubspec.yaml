@@ -26,6 +26,9 @@ dependencies:
   flutter_svg: ^2.2.0
   fluttertoast: ^8.2.12
   google_maps_flutter_web: ^0.5.12+2
+  device_info_plus: ^11.5.0
+  image_picker: ^1.1.2
+  camera: ^0.11.2
 
 dev_dependencies:
   flutter_test:

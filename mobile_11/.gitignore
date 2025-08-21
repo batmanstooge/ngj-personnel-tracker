@@ -53,7 +53,6 @@ app.*.map.json
 **/build/
 **/.dart_tool/
 **/.packages
-**/pubspec.lock  # Remove this if you want to track dependencies
 
 # Android
 **/android/local.properties
@@ -61,7 +60,7 @@ app.*.map.json
 **/android/app/google-services.json
 **/android/**/google-services.json
 **/android/gradle.properties
-
+android/app/src/main/AndroidManifest.xml
 # iOS
 **/ios/Flutter/flutter_export_environment.sh
 **/ios/GoogleService-Info.plist

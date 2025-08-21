@@ -7,6 +7,7 @@ class OfflineLocation {
   final String? address;
   final double? accuracy;
   final bool isSynced;
+  final bool isStationary; // Added this missing field
 
   OfflineLocation({
     this.id,
@@ -17,6 +18,7 @@ class OfflineLocation {
     this.address,
     this.accuracy,
     this.isSynced = false,
+    this.isStationary = false, // Added default value
   });
 
   Map<String, dynamic> toMap() {
@@ -29,6 +31,7 @@ class OfflineLocation {
       'address': address,
       'accuracy': accuracy,
       'isSynced': isSynced ? 1 : 0,
+      'isStationary': isStationary ? 1 : 0, // Added this field
     };
   }
 
@@ -42,6 +45,7 @@ class OfflineLocation {
       address: map['address'],
       accuracy: map['accuracy'],
       isSynced: map['isSynced'] == 1,
+      isStationary: map['isStationary'] == 1, // Added this field
     );
   }
 }

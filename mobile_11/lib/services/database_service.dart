@@ -20,8 +20,9 @@ class DatabaseService {
     String path = join(await getDatabasesPath(), 'location_tracker.db');
     return await openDatabase(
       path,
-      version: 1,
+      version: 2, // Updated version number
       onCreate: _onCreate,
+      onUpgrade: _onUpgrade, // Added upgrade handler
     );
   }
 
@@ -35,9 +36,24 @@ class DatabaseService {
         placeName TEXT,
         address TEXT,
         accuracy REAL,
-        isSynced INTEGER DEFAULT 0
+        isSynced INTEGER DEFAULT 0,
+        isStationary INTEGER DEFAULT 0
       )
     ''');
+  }
+
+  // Handle database upgrades
+  Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
+    if (oldVersion < 2) {
+      // Add the isStationary column to existing table
+      try {
+        await db.execute(
+          'ALTER TABLE offline_locations ADD COLUMN isStationary INTEGER DEFAULT 0',
+        );
+      } catch (e) {
+        print('Column already exists or error: $e');
+      }
+    }
   }
 
   // Insert location
@@ -75,20 +91,20 @@ class DatabaseService {
   // Get locations by date
   Future<List<OfflineLocation>> getLocationsByDate(DateTime date) async {
     final db = await database;
-    
+
     final startOfDay = DateTime(date.year, date.month, date.day, 0, 0, 0);
     final endOfDay = DateTime(date.year, date.month, date.day, 23, 59, 59);
-    
+
     final List<Map<String, dynamic>> maps = await db.query(
       'offline_locations',
       where: 'timestamp >= ? AND timestamp <= ?',
       whereArgs: [
         startOfDay.millisecondsSinceEpoch,
-        endOfDay.millisecondsSinceEpoch
+        endOfDay.millisecondsSinceEpoch,
       ],
       orderBy: 'timestamp ASC',
     );
-    
+
     return List.generate(maps.length, (i) {
       return OfflineLocation.fromMap(maps[i]);
     });
@@ -118,9 +134,13 @@ class DatabaseService {
   // Get database size info
   Future<Map<String, dynamic>> getDatabaseInfo() async {
     final db = await database;
-    final count = await db.rawQuery('SELECT COUNT(*) as count FROM offline_locations');
-    final unsyncedCount = await db.rawQuery('SELECT COUNT(*) as count FROM offline_locations WHERE isSynced = 0');
-    
+    final count = await db.rawQuery(
+      'SELECT COUNT(*) as count FROM offline_locations',
+    );
+    final unsyncedCount = await db.rawQuery(
+      'SELECT COUNT(*) as count FROM offline_locations WHERE isSynced = 0',
+    );
+
     return {
       'totalLocations': count.first['count'],
       'unsyncedLocations': unsyncedCount.first['count'],

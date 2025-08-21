@@ -1,23 +1,37 @@
 import Location from '../models/location.model.js';
-import User from '../models/user.model.js';
+import Job from '../models/job.model.js';
 import mongoose from 'mongoose';
 
-// Save location
+// Save location with stationary detection
 const saveLocation = async (req, res) => {
     try {
-        const { latitude, longitude, placeName, address, accuracy } = req.body;
+        const { latitude, longitude, placeName, address, accuracy, isStationary, stationaryDuration } = req.body;
         const userId = req.userId;
+        const jobId = req.jobId;
+
+        // Verify job exists and is active
+        const job = await Job.findById(jobId);
+        if (!job || !job.isActive) {
+            return res.status(400).json({ message: 'Job not found or inactive' });
+        }
 
         const location = new Location({
+            jobId,
             userId,
             latitude,
             longitude,
             placeName,
             address,
-            accuracy
+            accuracy,
+            isStationary,
+            stationaryDuration
         });
 
         await location.save();
+
+        // Add location to job
+        job.locations.push(location._id);
+        await job.save();
 
         res.status(201).json({
             message: 'Location saved successfully',
@@ -30,122 +44,82 @@ const saveLocation = async (req, res) => {
     }
 };
 
-// Get daily locations
-const getDailyLocations = async (req, res) => {
+// Get job locations
+const getJobLocations = async (req, res) => {
     try {
-        const { date } = req.query;
-        const userId = req.userId;
+        const jobId = req.jobId;
 
-        const targetDate = date ? new Date(date) : new Date();
-        const startOfDay = new Date(targetDate.setHours(0, 0, 0, 0));
-        const endOfDay = new Date(targetDate.setHours(23, 59, 59, 999));
-
-        const locations = await Location``.find({
-            userId,
-            timestamp: {
-                $gte: startOfDay,
-                $lte: endOfDay
-            }
+        const locations = await Location.find({
+            jobId
         }).sort({ timestamp: 1 });
 
         res.json(locations);
 
     } catch (error) {
-        console.error('Get daily locations error:', error);
+        console.error('Get job locations error:', error);
         res.status(500).json({ message: 'Server error' });
     }
 };
 
-// Get date range locations
-const getDateRangeLocations = async (req, res) => {
-    try {
-        const { start, end } = req.query;
-        const userId = req.userId;
-
-        const locations = await Location.find({
-            userId,
-            timestamp: {
-                $gte: new Date(start),
-                $lte: new Date(end)
-            }
-        }).sort({ timestamp: 1 });
-
-        res.json(locations);
-
-    } catch (error) {
-        console.error('Get date range locations error:', error);
-        res.status(500).json({ message: 'Server error' });
-    }
-};
-
-// Get calendar data (summary of locations per day)
-const getCalendarData = async (req, res) => {
+// Get daily job summary
+const getDailyJobSummary = async (req, res) => {
     try {
         const userId = req.userId;
-
-        const calendarData = await Location.aggregate([
-            {
-                $match: {
-                    userId: new mongoose.Types.ObjectId(userId)
-                }
-            },
-            {
-                $group: {
-                    _id: {
-                        year: { $year: "$timestamp" },
-                        month: { $month: "$timestamp" },
-                        day: { $dayOfMonth: "$timestamp" }
-                    },
-                    count: { $sum: 1 },
-                    date: { $first: "$timestamp" }
-                }
-            },
-            {
-                $sort: { date: -1 }
-            }
-        ]);
-
-        res.json(calendarData);
-
-    } catch (error) {
-        console.error('Get calendar data error:', error);
-        res.status(500).json({ message: 'Server error' });
-    }
-};
-
-// Get daily summary
-const getDailySummary = async (req, res) => {
-    try {
         const { date } = req.query;
-        const userId = req.userId;
 
         const targetDate = date ? new Date(date) : new Date();
         const startOfDay = new Date(targetDate.setHours(0, 0, 0, 0));
         const endOfDay = new Date(targetDate.setHours(23, 59, 59, 999));
 
-        const locations = await Location.find({
+        // Find jobs for the user on the specified date
+        const jobs = await Job.find({
             userId,
-            timestamp: {
+            startTime: {
                 $gte: startOfDay,
                 $lte: endOfDay
             }
-        }).sort({ timestamp: 1 });
+        }).populate('locations');
 
         // Create summary
         const summary = {
             date: startOfDay,
-            totalLocations: locations.length,
-            firstLocation: locations[0] || null,
-            lastLocation: locations[locations.length - 1] || null,
-            locations: locations
+            totalJobs: jobs.length,
+            jobs: jobs.map(job => ({
+                id: job._id,
+                startTime: job.startTime,
+                endTime: job.endTime,
+                deviceId: job.deviceId,
+                totalLocations: job.locations.length,
+                firstLocation: job.locations[0] || null,
+                lastLocation: job.locations[job.locations.length - 1] || null,
+                locations: job.locations
+            }))
         };
 
         res.json(summary);
 
     } catch (error) {
-        console.error('Get daily summary error:', error);
+        console.error('Get daily job summary error:', error);
         res.status(500).json({ message: 'Server error' });
     }
 };
 
-export { saveLocation, getDailyLocations, getDateRangeLocations, getCalendarData, getDailySummary };
+// Get stationary locations
+const getStationaryLocations = async (req, res) => {
+    try {
+        const jobId = req.jobId;
+
+        const locations = await Location.find({
+            jobId,
+            isStationary: true
+        }).sort({ timestamp: 1 });
+
+        res.json(locations);
+
+    } catch (error) {
+        console.error('Get stationary locations error:', error);
+        res.status(500).json({ message: 'Server error' });
+    }
+};
+
+export { saveLocation, getJobLocations, getDailyJobSummary, getStationaryLocations };

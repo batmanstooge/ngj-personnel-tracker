@@ -1,28 +1,38 @@
 import mongoose from 'mongoose';
 
 const userSchema = new mongoose.Schema({
-    phoneNumber: {
+    email: {
         type: String,
         required: true,
         unique: true,
+        lowercase: true,
+        trim: true
     },
-    otp: {
-        type: String,
+    emailVerified: {
+        type: Boolean,
+        default: false
     },
-    otpExpiry: {
-        type: Date,
+    emailVerificationToken: {
+        type: String
+    },
+    emailVerificationExpiry: {
+        type: Date
     },
     isActive: {
         type: Boolean,
-        default: true,
+        default: true
     },
     lastLogin: {
         type: Date,
-        default: Date.now,
+        default: Date.now
     },
     createdAt: {
         type: Date,
-        default: Date.now,
+        default: Date.now
+    },
+    currentJob: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Job'
     }
 });
 
