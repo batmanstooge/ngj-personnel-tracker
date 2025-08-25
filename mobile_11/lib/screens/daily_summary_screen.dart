@@ -6,10 +6,9 @@ import '../services/location_service.dart';
 class DailySummaryScreen extends StatefulWidget {
   final DateTime date;
 
- const DailySummaryScreen({super.key, required this.date});
- 
+  const DailySummaryScreen({super.key, required this.date});
 
-@override
+  @override
   State<DailySummaryScreen> createState() {
     return _DailySummaryScreenState();
   }
@@ -28,7 +27,9 @@ class _DailySummaryScreenState extends State<DailySummaryScreen> {
   _loadDailyLocations() async {
     setState(() => _isLoading = true);
     try {
-      final locations = await LocationService().getLocationsForDate(widget.date);
+      final locations = await LocationService().getLocationsForDate(
+        widget.date,
+      );
       setState(() {
         _locations = locations;
       });
@@ -42,97 +43,107 @@ class _DailySummaryScreenState extends State<DailySummaryScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text('Daily Summary'),
-      ),
-      body: _isLoading
-          ? Center(child: CircularProgressIndicator())
-          : SingleChildScrollView(
-              padding: EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Date Header
-                  Container(
-                    padding: EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).primaryColor.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(12),
+      appBar: AppBar(title: Text('Daily Summary')),
+      body:
+          _isLoading
+              ? Center(child: CircularProgressIndicator())
+              : SingleChildScrollView(
+                padding: EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Date Header
+                    Container(
+                      padding: EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).primaryColor.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Column(
+                        children: [
+                          Text(
+                            DateFormat('EEEE').format(widget.date),
+                            style: Theme.of(context).textTheme.headlineSmall,
+                          ),
+                          Text(
+                            DateFormat('MMMM d, yyyy').format(widget.date),
+                            style: Theme.of(context).textTheme.bodyLarge,
+                          ),
+                          SizedBox(height: 8),
+                          Text(
+                            '${_locations.length} locations recorded',
+                            style: Theme.of(context).textTheme.bodyMedium,
+                          ),
+                        ],
+                      ),
                     ),
-                    child: Column(
-                      children: [
-                        Text(
-                          DateFormat('EEEE').format(widget.date),
-                          style: Theme.of(context).textTheme.headlineSmall,
-                        ),
-                        Text(
-                          DateFormat('MMMM d, yyyy').format(widget.date),
-                          style: Theme.of(context).textTheme.bodyLarge,
-                        ),
-                        SizedBox(height: 8),
-                        Text(
-                          '${_locations.length} locations recorded',
-                          style: Theme.of(context).textTheme.bodyMedium,
-                        ),
-                      ],
-                    ),
-                  ),
-                  
-                  SizedBox(height: 20),
-                  
-                  // First and Last Locations
-                  if (_locations.isNotEmpty) ...[
-                    _buildLocationCard(
-                      'First Location', 
-                      _locations.first,
-                      Icons.arrow_upward,
-                      Colors.green
-                    ),
-                    
-                    SizedBox(height: 16),
-                    
-                    _buildLocationCard(
-                      'Last Location', 
-                      _locations.last,
-                      Icons.arrow_downward,
-                      Colors.blue
-                    ),
-                    
-                    SizedBox(height: 24),
-                    
-                    // All Locations Section
-                    Text(
-                      'All Locations (${_locations.length})',
-                      style: Theme.of(context).textTheme.headlineSmall,
-                    ),
-                    SizedBox(height: 16),
-                    
-                    ..._locations.map((location) => 
-                      _buildLocationListItem(location)
-                    ).toList(),
+
+                    SizedBox(height: 20),
+
+                    // First and Last Locations
+                    if (_locations.isNotEmpty) ...[
+                      _buildLocationCard(
+                        'First Location',
+                        _locations.first,
+                        Icons.arrow_upward,
+                        Colors.green,
+                      ),
+
+                      SizedBox(height: 16),
+
+                      _buildLocationCard(
+                        'Last Location',
+                        _locations.last,
+                        Icons.arrow_downward,
+                        Colors.blue,
+                      ),
+
+                      SizedBox(height: 24),
+
+                      // All Locations Section
+                      Text(
+                        'All Locations (${_locations.length})',
+                        style: Theme.of(context).textTheme.headlineSmall,
+                      ),
+                      SizedBox(height: 16),
+
+                      ..._locations
+                          .map((location) => _buildLocationListItem(location))
+                          .toList(),
+                    ],
                   ],
-                ],
+                ),
               ),
-            ),
     );
   }
 
-  Widget _buildLocationCard(String title, dynamic location, IconData icon, Color color) {
-    final timestamp = location is OfflineLocation 
-        ? location.timestamp 
-        : DateTime.parse(location['timestamp'] as String);
-        
-    final placeName = location is OfflineLocation 
-        ? location.address 
-        : location.address as String?;
-        
-    final latitude = location is OfflineLocation 
-        ? location.latitude 
-        : (location['latitude'] as num).toDouble();
-        
-    final longitude = location is OfflineLocation 
-        ? location.longitude 
-        : (location['longitude'] as num).toDouble();
+  // For more detailed format including date
+
+  Widget _buildLocationCard(
+    String title,
+    dynamic location,
+    IconData icon,
+    Color color,
+  ) {
+    final timestamp =
+        location is OfflineLocation
+            ? location.timestamp
+            : DateTime.parse(location['timestamp'] as String);
+
+    final placeName =
+        location is OfflineLocation
+            ? location.address
+            : location.address as String?;
+
+    final latitude =
+        location is OfflineLocation
+            ? location.latitude
+            : (location['latitude'] as num).toDouble();
+
+    final longitude =
+        location is OfflineLocation
+            ? location.longitude
+            : (location['longitude'] as num).toDouble();
 
     return Card(
       child: Padding(
@@ -147,9 +158,9 @@ class _DailySummaryScreenState extends State<DailySummaryScreen> {
                 Text(
                   title,
                   style: TextStyle(
-                    fontSize: 18, 
+                    fontSize: 18,
                     fontWeight: FontWeight.bold,
-                    color: color
+                    color: color,
                   ),
                 ),
               ],
@@ -164,7 +175,7 @@ class _DailySummaryScreenState extends State<DailySummaryScreen> {
               '${latitude.toStringAsFixed(6)}, ${longitude.toStringAsFixed(6)}',
               style: Theme.of(context).textTheme.bodyMedium,
             ),
-            SizedBox(height: 4),
+            // SizedBox(height: 4),
             // Text(
             //   DateFormat('h:mm a').format(timestamp),
             //   style: Theme.of(context).textTheme.bodySmall,
@@ -176,33 +187,31 @@ class _DailySummaryScreenState extends State<DailySummaryScreen> {
   }
 
   Widget _buildLocationListItem(dynamic location) {
-    final timestamp = location is OfflineLocation 
-        ? location.timestamp 
-        : DateTime.parse(location['timestamp'] as String);
-        
-    final placeName = location is OfflineLocation 
-        ? location.placeName 
-        : location.address as String?;
+    final timestamp =
+        location is OfflineLocation
+            ? location.timestamp
+            : DateTime.parse(location['timestamp'] as String);
+
+    String _formatToLocalDateTime(DateTime utcTime) {
+      final localTime = timestamp.toLocal();
+      return DateFormat('MMM d, h:mm a').format(localTime);
+    }
+
+    final placeName =
+        location is OfflineLocation
+            ? location.placeName
+            : location.address as String?;
 
     return Card(
       margin: EdgeInsets.symmetric(vertical: 4),
       child: ListTile(
-        leading: Icon(
-          Icons.location_on,
-          color: Theme.of(context).primaryColor,
-        ),
-        title: Text(
-          placeName! ,
-          style: Theme.of(context).textTheme.bodyLarge,
-        ),
+        leading: Icon(Icons.location_on, color: Theme.of(context).primaryColor),
+        title: Text(placeName!, style: Theme.of(context).textTheme.bodyLarge),
         subtitle: Text(
-          DateFormat('h:mm a').format(timestamp),
+          _formatToLocalDateTime(timestamp),
           style: Theme.of(context).textTheme.bodySmall,
         ),
         trailing: Icon(Icons.arrow_forward_ios, size: 16),
-        onTap: () {
-          // Show location details
-        },
       ),
     );
   }

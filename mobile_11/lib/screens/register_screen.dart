@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:fluttertoast/fluttertoast.dart';
+import 'package:personal_tracker/screens/login_screen.dart';
 import '../services/auth_service.dart';
 
 class RegisterScreen extends StatefulWidget {
@@ -26,10 +27,19 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
       if (response.containsKey('message')) {
         Fluttertoast.showToast(msg: response['message']);
-        // Navigate to verification screen or show verification message
+        if (response['message'].contains('Verification email sent') ||
+            response['message'].contains('User registered successfully')) {
+          // Navigate to login screen after successful registration
+          Future.delayed(Duration(seconds: 2), () {
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(builder: (context) => LoginScreen()),
+            );
+          });
+        }
       }
     } catch (e) {
-      Fluttertoast.showToast(msg: 'Error: ${e.toString()}');
+      Fluttertoast.showToast(msg: "Registration failed. Please try again.");
       print('Registration error: $e');
     } finally {
       setState(() => _isLoading = false);

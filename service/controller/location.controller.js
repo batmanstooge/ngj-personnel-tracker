@@ -1,7 +1,5 @@
 import Location from '../models/location.model.js';
 import Job from '../models/job.model.js';
-import mongoose from 'mongoose';
-
 // Save location with stationary detection
 const saveLocation = async (req, res) => {
     try {

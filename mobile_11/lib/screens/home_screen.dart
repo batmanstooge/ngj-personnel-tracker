@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:personal_tracker/screens/logout_screen.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:fluttertoast/fluttertoast.dart';
@@ -180,97 +181,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     });
   }
 
-  Future<void> _takeLogoutPhoto() async {
-    try {
-      final picker = ImagePicker();
-      final pickedFile = await picker.pickImage(
-        source: ImageSource.camera,
-        maxWidth: 800,
-        maxHeight: 800,
-      );
+  
 
-      if (pickedFile != null) {
-        setState(() {
-          _logoutPhoto = File(pickedFile.path);
-          _photoTaken = true;
-        });
-      }
-    } catch (e) {
-      Fluttertoast.showToast(msg: 'Error taking photo: ${e.toString()}');
-      print('Photo capture error: $e');
-    }
-  }
-
-  Future<String> _getImageBase64(File imageFile) async {
-    try {
-      List<int> imageBytes = await imageFile.readAsBytes();
-      return base64Encode(imageBytes);
-    } catch (e) {
-      print('Image encoding error: $e');
-      rethrow; // Re-throw to handle in calling function
-    }
-  }
-
-  Future<void> _logout() async {
-    print('Starting logout process...');
-
-    if (_logoutPhoto == null) {
-      Fluttertoast.showToast(
-        msg: 'Please take a logout photo for verification',
-      );
-      return;
-    }
-
-    setState(() => _isLoading = true);
-    print('Loading state set to true');
-
-    try {
-      print('Converting image to base64...');
-      String photoBase64 = '';
-      try {
-        photoBase64 = await _getImageBase64(_logoutPhoto!);
-        print('Image converted successfully, length: ${photoBase64.length}');
-      } catch (imageError) {
-        print('Image conversion failed: $imageError');
-        Fluttertoast.showToast(msg: 'Failed to process logout photo');
-        setState(() => _isLoading = false);
-        return;
-      }
-
-      print('Calling AuthService.logout...');
-      final response = await AuthService().logout(photoBase64);
-      print('AuthService.logout completed');
-
-      if (response.containsKey('message')) {
-        Fluttertoast.showToast(msg: response['message']);
-      }
-
-      print('Clearing local data...');
-      SharedPreferences prefs = await SharedPreferences.getInstance();
-      await prefs.setBool('isLoggedIn', false);
-      await prefs.remove('auth_token');
-      await prefs.remove('current_job_id');
-
-      print('Navigating to login screen...');
-      if (mounted) {
-        Navigator.pushAndRemoveUntil(
-          context,
-          MaterialPageRoute(builder: (context) => LoginScreen()),
-          (route) => false,
-        );
-      }
-    } catch (e) {
-      print('Logout process failed with error: $e');
-      print('Stack trace: ${StackTrace.current}');
-      if (mounted) {
-        Fluttertoast.showToast(msg: 'Logout failed: ${e.toString()}');
-      }
-    } finally {
-      print('Logout process completed');
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
-    }
+  _handleLogout() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => LogoutScreen()),
+    );
   }
 
   @override
@@ -279,7 +196,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text('Location Tracker'),
+        title: Text('Personnel Tracker'),
         actions: [
           // Connection status indicator
           Padding(
@@ -316,6 +233,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           ),
 
           IconButton(icon: Icon(Icons.sync), onPressed: _syncOfflineData),
+          IconButton(
+            icon: Icon(Icons.logout),
+            onPressed: _handleLogout,
+            tooltip: 'Logout',
+          ),
         ],
       ),
       body: Column(
@@ -337,107 +259,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               ),
             ),
 
-          // Logout section
-          Container(
-            padding: EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              border: Border(
-                bottom: BorderSide(color: Theme.of(context).dividerColor),
-              ),
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'End Job & Logout',
-                        style: Theme.of(context).textTheme.titleMedium,
-                      ),
-                      Text(
-                        'Take a photo to verify logout',
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-                    ],
-                  ),
-                ),
-
-                if (_photoTaken && _logoutPhoto != null)
-                  Container(
-                    height: 50,
-                    width: 50,
-                    decoration: BoxDecoration(
-                      border: Border.all(color: Theme.of(context).primaryColor),
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(4),
-                      child: Image.file(_logoutPhoto!, fit: BoxFit.cover),
-                    ),
-                  )
-                else
-                  Container(
-                    height: 50,
-                    width: 50,
-                    decoration: BoxDecoration(
-                      border: Border.all(
-                        color: Theme.of(context).disabledColor,
-                      ),
-                      borderRadius: BorderRadius.circular(4),
-                      color: Theme.of(context).disabledColor.withOpacity(0.1),
-                    ),
-                    child: Icon(
-                      Icons.camera_alt,
-                      size: 20,
-                      color: Theme.of(context).disabledColor,
-                    ),
-                  ),
-
-                SizedBox(width: 10),
-
-                ElevatedButton.icon(
-                  onPressed: _takeLogoutPhoto,
-                  icon: Icon(Icons.camera_alt, size: 16),
-                  label: Text('Photo'),
-                  style: ElevatedButton.styleFrom(
-                    padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  ),
-                ),
-
-                SizedBox(width: 10),
-
-                ElevatedButton(
-                  onPressed: _isLoading ? null : (_photoTaken ? _logout : null),
-
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.red,
-                    foregroundColor: Colors.white,
-                  ),
-                  child:
-                      _isLoading
-                          ? Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              SizedBox(
-                                width: 16,
-                                height: 16,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  valueColor: AlwaysStoppedAnimation<Color>(
-                                    Colors.white,
-                                  ),
-                                ),
-                              ),
-                              SizedBox(width: 8),
-                              Text('Logging out...'),
-                            ],
-                          )
-                          : Text('Logout'),
-                ),
-              ],
-            ),
-          ),
+         
 
           // Map
           Expanded(

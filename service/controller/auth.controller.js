@@ -5,7 +5,6 @@ import jwt from 'jsonwebtoken';
 import nodemailer from 'nodemailer';
 import crypto from 'crypto';
 
-// Configure nodemailer with correct method name
 const createTransporter = () => {
   // Check if environment variables exist
   if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
@@ -13,7 +12,6 @@ const createTransporter = () => {
     return null;
   }
 
-  // Correct method name is createTransport (not createTransporter)
   return nodemailer.createTransport({
     service: 'gmail',
     auth: {
@@ -31,6 +29,7 @@ const generateVerificationToken = () => {
 // Register user
 const register = async (req, res) => {
   try {
+    console.log('Registration request received:', req.body);
     const { email } = req.body;
 
     // Validate email format
@@ -41,6 +40,7 @@ const register = async (req, res) => {
 
     // Check if user already exists
     let user = await User.findOne({ email });
+    console.log('User lookup result:', user);
 
     if (user) {
       if (user.emailVerified) {
@@ -48,6 +48,7 @@ const register = async (req, res) => {
       }
     } else {
       // Create new user
+      console.log('Creating new user...');
       user = new User({ email });
     }
 
@@ -56,14 +57,17 @@ const register = async (req, res) => {
     user.emailVerificationToken = token;
     user.emailVerificationExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
 
+    console.log('Saving user...');
     await user.save();
+    console.log('User saved successfully'); // Debug log
 
-    // Try to send verification email
+    //  send verification email
     const transporter = createTransporter();
 
     if (transporter) {
       try {
         await sendVerificationEmail(email, token, transporter);
+        console.log('Verification email sent successfully'); 
         res.json({
           message: 'Verification email sent. Please check your inbox.',
           email: email
@@ -93,14 +97,20 @@ const register = async (req, res) => {
     }
 
   } catch (error) {
-    console.error('Register error:', error);
+   console.error('=== REGISTRATION ERROR ===');
+    console.error('Error type:', error.constructor.name);
+    console.error('Error message:', error.message);
+    console.error('Error stack:', error.stack);
+    console.error('========================');
     res.status(500).json({ message: 'Server error' });
   }
 };
 
 // Send verification email with transporter parameter
 const sendVerificationEmail = async (email, token, transporter) => {
-  const verificationUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/auth/verify-email?token=${token}`;
+  // const verificationUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/auth/verify-email?token=${token}`;
+  const verificationUrl = `${'https://personnel-tracker-ws.onrender.com'}/auth/verify-email?token=${token}`;
+
   console.log("verification sent to: ", verificationUrl);
   const mailOptions = {
     from: process.env.EMAIL_USER,

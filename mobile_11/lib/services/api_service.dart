@@ -3,8 +3,9 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 class ApiService {
-  static final String baseUrl =
-      'http://10.0.2.2:3000'; 
+  // static final String baseUrl = 'http://10.0.2.2:3000';
+
+  static final String baseUrl = "https://personnel-tracker-ws.onrender.com";
   static String? _token;
 
   static Future<void> init() async {
@@ -154,29 +155,31 @@ class ApiService {
 
   // Logout user and end job
   static Future<Map<String, dynamic>> logout(String logoutPhoto) async {
-  try {
-    final response = await _makeRequest('POST', '/auth/logout', body: {
-      'logoutPhoto': logoutPhoto,
-    });
-    
-    _token = null;
-    SharedPreferences prefs = await SharedPreferences.getInstance();
-    await prefs.remove('auth_token');
-    await prefs.remove('current_job_id');
-    
-    return response;
-  } catch (e) {
-    print('API Service logout error: $e');
-    // Clear local tokens even if server call fails
-    _token = null;
-    SharedPreferences prefs = await SharedPreferences.getInstance();
-    await prefs.remove('auth_token');
-    await prefs.remove('current_job_id');
-    
-    // Return a default response
-    return {'message': 'Logged out successfully'};
+    try {
+      final response = await _makeRequest(
+        'POST',
+        '/auth/logout',
+        body: {'logoutPhoto': logoutPhoto},
+      );
+
+      _token = null;
+      SharedPreferences prefs = await SharedPreferences.getInstance();
+      await prefs.remove('auth_token');
+      await prefs.remove('current_job_id');
+
+      return response;
+    } catch (e) {
+      print('API Service logout error: $e');
+      // Clear local tokens even if server call fails
+      _token = null;
+      SharedPreferences prefs = await SharedPreferences.getInstance();
+      await prefs.remove('auth_token');
+      await prefs.remove('current_job_id');
+
+      // Return a default response
+      return {'message': 'Logged out successfully'};
+    }
   }
-}
 
   // Save location
   static Future<Map<String, dynamic>> saveLocation({
