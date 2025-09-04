@@ -35,6 +35,7 @@ class _DailySummaryScreenState extends State<DailySummaryScreen> {
       });
     } catch (e) {
       print('Error loading locations: $e');
+      // Optionally show an error message to the user
     } finally {
       setState(() => _isLoading = false);
     }
@@ -117,7 +118,37 @@ class _DailySummaryScreenState extends State<DailySummaryScreen> {
     );
   }
 
-  // For more detailed format including date
+  // Helper method to get a displayable name/address for a location
+  String _getLocationDisplayName(dynamic location) {
+    String? name;
+
+    if (location is OfflineLocation) {
+      // Check placeName first, then address for OfflineLocation
+      name = location.placeName ?? location.address;
+    } else if (location is Map<String, dynamic>) {
+      // Check placeName first, then address for Map (API data)
+      name = location['placeName'] as String? ?? location['address'] as String?;
+    }
+
+    // Fallback to coordinates if no name/address found
+    if (name == null || name.isEmpty) {
+      double? lat, lng;
+      if (location is OfflineLocation) {
+        lat = location.latitude;
+        lng = location.longitude;
+      } else if (location is Map<String, dynamic>) {
+        lat = (location['latitude'] as num?)?.toDouble();
+        lng = (location['longitude'] as num?)?.toDouble();
+      }
+      if (lat != null && lng != null) {
+        name = '${lat.toStringAsFixed(6)}, ${lng.toStringAsFixed(6)}';
+      } else {
+        name = 'Unknown Location';
+      }
+    }
+
+    return name;
+  }
 
   Widget _buildLocationCard(
     String title,
@@ -130,20 +161,24 @@ class _DailySummaryScreenState extends State<DailySummaryScreen> {
             ? location.timestamp
             : DateTime.parse(location['timestamp'] as String);
 
-    final placeName =
-        location is OfflineLocation
-            ? location.address
-            : location.address as String?;
+    // Use the helper method to get the display name
+    final displayName = _getLocationDisplayName(location);
 
-    final latitude =
-        location is OfflineLocation
-            ? location.latitude
-            : (location['latitude'] as num).toDouble();
+    // Get coordinates for display
+    double latitude, longitude;
+    if (location is OfflineLocation) {
+      latitude = location.latitude;
+      longitude = location.longitude;
+    } else {
+      latitude = (location['latitude'] as num).toDouble();
+      longitude = (location['longitude'] as num).toDouble();
+    }
 
-    final longitude =
-        location is OfflineLocation
-            ? location.longitude
-            : (location['longitude'] as num).toDouble();
+    // Format time to local
+    String _formatToLocalTime(DateTime utcTime) {
+      final localTime = utcTime.toLocal();
+      return DateFormat('h:mm a').format(localTime);
+    }
 
     return Card(
       child: Padding(
@@ -167,7 +202,7 @@ class _DailySummaryScreenState extends State<DailySummaryScreen> {
             ),
             SizedBox(height: 12),
             Text(
-              placeName ?? 'Unknown Location',
+              displayName, // Use the resolved display name
               style: Theme.of(context).textTheme.bodyLarge,
             ),
             SizedBox(height: 4),
@@ -175,11 +210,11 @@ class _DailySummaryScreenState extends State<DailySummaryScreen> {
               '${latitude.toStringAsFixed(6)}, ${longitude.toStringAsFixed(6)}',
               style: Theme.of(context).textTheme.bodyMedium,
             ),
-            // SizedBox(height: 4),
-            // Text(
-            //   DateFormat('h:mm a').format(timestamp),
-            //   style: Theme.of(context).textTheme.bodySmall,
-            // ),
+            SizedBox(height: 4),
+            Text(
+              _formatToLocalTime(timestamp), // Display local time
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
           ],
         ),
       ),
@@ -192,21 +227,23 @@ class _DailySummaryScreenState extends State<DailySummaryScreen> {
             ? location.timestamp
             : DateTime.parse(location['timestamp'] as String);
 
+    // Use the helper method to get the display name
+    final displayName = _getLocationDisplayName(location);
+
+    // Format time to local
     String _formatToLocalDateTime(DateTime utcTime) {
-      final localTime = timestamp.toLocal();
+      final localTime = utcTime.toLocal();
       return DateFormat('MMM d, h:mm a').format(localTime);
     }
-
-    final placeName =
-        location is OfflineLocation
-            ? location.placeName
-            : location.address as String?;
 
     return Card(
       margin: EdgeInsets.symmetric(vertical: 4),
       child: ListTile(
         leading: Icon(Icons.location_on, color: Theme.of(context).primaryColor),
-        title: Text(placeName!, style: Theme.of(context).textTheme.bodyLarge),
+        title: Text(
+          displayName,
+          style: Theme.of(context).textTheme.bodyLarge,
+        ), // Use display name
         subtitle: Text(
           _formatToLocalDateTime(timestamp),
           style: Theme.of(context).textTheme.bodySmall,

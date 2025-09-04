@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:fluttertoast/fluttertoast.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'dart:io';
+import 'dart:typed_data';
 import 'dart:convert';
 import 'dart:io' show Platform;
 import 'package:device_info_plus/device_info_plus.dart';
@@ -20,22 +22,85 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _isLoading = false;
   bool _photoTaken = false;
 
+  @override
+  void initState() {
+    super.initState();
+    _getDeviceId();
+  }
+
+  Future<String> _compressAndGetBase64(File imageFile) async {
+    try {
+      print('Compressing image: ${imageFile.path}');
+
+      // Method 1: Try compressing with file path
+      final compressedBytes = await FlutterImageCompress.compressWithFile(
+        imageFile.absolute.path,
+        minWidth: 640,
+        minHeight: 640,
+        quality: 70,
+        rotate: 0,
+      );
+
+      if (compressedBytes != null) {
+        print(
+          'Image compressed successfully, size: ${compressedBytes.length} bytes',
+        );
+        return base64Encode(compressedBytes);
+      } else {
+        throw Exception("Image compression returned null");
+      }
+    } catch (e) {
+      print('Image compression failed: $e');
+
+      // Fallback: Try to reduce image size by reading and resizing
+      try {
+        // Read file bytes
+        final bytes = await imageFile.readAsBytes();
+        print('Original image size: ${bytes.length} bytes');
+
+        // If image is too large, try different compression settings
+        if (bytes.length > 5000000) {
+          // 5MB
+          final compressedBytes = await FlutterImageCompress.compressWithFile(
+            imageFile.absolute.path,
+            minWidth: 480,
+            minHeight: 480,
+            quality: 50,
+          );
+
+          if (compressedBytes != null) {
+            print(
+              'Fallback compression successful, size: ${compressedBytes.length} bytes',
+            );
+            return base64Encode(compressedBytes);
+          }
+        }
+
+        // Last resort: encode original (might cause 413 error)
+        return base64Encode(bytes);
+      } catch (fallbackError) {
+        print('Fallback compression also failed: $fallbackError');
+        rethrow;
+      }
+    }
+  }
+
   Future<void> _takeLoginPhoto() async {
     try {
       final picker = ImagePicker();
-      final pickedFile = await picker.pickImage(
-        source: ImageSource.camera,
-        maxWidth: 800,
-        maxHeight: 800,
-      );
+      final pickedFile = await picker.pickImage(source: ImageSource.camera);
 
       if (pickedFile != null) {
+        final File imageFile = File(pickedFile.path);
+
         setState(() {
           _loginPhoto = File(pickedFile.path);
           _photoTaken = true;
         });
+        String compressedBase64 = await _compressAndGetBase64(imageFile);
       }
     } catch (e) {
+      print('Error taking photo: ${e.toString()}');
       Fluttertoast.showToast(msg: 'Error taking photo: ${e.toString()}');
     }
   }
@@ -46,15 +111,17 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<String> _getDeviceId() async {
-    final deviceInfo = DeviceInfoPlugin();
-
+    final DeviceInfoPlugin deviceInfo = DeviceInfoPlugin();
     if (Platform.isAndroid) {
-      final androidInfo = await deviceInfo.androidInfo;
+      AndroidDeviceInfo androidInfo = await deviceInfo.androidInfo;
+      print("androidInfo: ${androidInfo.id}");
       return androidInfo.id;
     } else if (Platform.isIOS) {
-      final iosInfo = await deviceInfo.iosInfo;
-      return iosInfo.identifierForVendor ?? 'unknown_device';
+      IosDeviceInfo iosInfo = await deviceInfo.iosInfo;
+      print(iosInfo.systemName);
+      return iosInfo.systemName;
     } else {
+      print("unknown_device");
       return 'unknown_device';
     }
   }
@@ -76,7 +143,13 @@ class _LoginScreenState extends State<LoginScreen> {
 
     try {
       // Convert photo to base64
-      final photoBase64 = await _getImageBase64(_loginPhoto!);
+      String photoBase64 = "";
+      if (_loginPhoto != null) {
+        // Compress the image before converting to base64
+        photoBase64 = await _compressAndGetBase64(_loginPhoto!);
+      } else {
+        throw Exception("Login photo is null");
+      }
 
       // Get device ID
       final deviceId = await _getDeviceId();
@@ -114,7 +187,7 @@ class _LoginScreenState extends State<LoginScreen> {
       }
 
       print('Login error: ${e.toString()}');
-      Fluttertoast.showToast(msg: "User not found. Please register first");
+      Fluttertoast.showToast(msg: errorMessage);
     } finally {
       setState(() => _isLoading = false);
     }
